@@ -9,9 +9,11 @@ import UIKit
 
 final class AppContainer {
     private let apiClient: APIClient
+    private let imageLoader: ImageLoader
 
     init() {
         self.apiClient = APIClient(baseURL: INaturalistEndpoint.baseURL)
+        self.imageLoader = RemoteImageLoader()
     }
 
     func makeAppCoordinator(window: UIWindow) -> AppCoordinator {
@@ -29,5 +31,9 @@ final class AppContainer {
 
     func makeTaxaRepository() -> TaxaRepository {
         RemoteTaxaRepository(apiClient: apiClient)
+    }
+
+    func makeImageLoader() -> ImageLoader {
+        imageLoader
     }
 }
