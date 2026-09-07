@@ -21,8 +21,8 @@ final class AppContainer {
     }
 
     func makeExploreViewController() -> ExploreViewController {
-        let viewModel = ExploreViewModel()
-        return ExploreViewController(viewModel: viewModel)
+        let viewModel = ExploreViewModel(observationsRepository: makeObservationsRepository())
+        return ExploreViewController(viewModel: viewModel, imageLoader: imageLoader)
     }
 
     func makeObservationsRepository() -> ObservationsRepository {
