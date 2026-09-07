@@ -8,6 +8,11 @@
 import UIKit
 
 final class AppContainer {
+    private let apiClient: APIClient
+
+    init() {
+        self.apiClient = APIClient(baseURL: INaturalistEndpoint.baseURL)
+    }
 
     func makeAppCoordinator(window: UIWindow) -> AppCoordinator {
         AppCoordinator(window: window, appContainer: self)
@@ -16,5 +21,13 @@ final class AppContainer {
     func makeExploreViewController() -> ExploreViewController {
         let viewModel = ExploreViewModel()
         return ExploreViewController(viewModel: viewModel)
+    }
+
+    func makeObservationsRepository() -> ObservationsRepository {
+        RemoteObservationsRepository(apiClient: apiClient)
+    }
+
+    func makeTaxaRepository() -> TaxaRepository {
+        RemoteTaxaRepository(apiClient: apiClient)
     }
 }
