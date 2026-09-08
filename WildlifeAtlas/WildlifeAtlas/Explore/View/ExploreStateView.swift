@@ -35,6 +35,8 @@ final class ExploreStateView: UIView {
     private let retryButton: UIButton = {
         var configuration = UIButton.Configuration.filled()
         configuration.title = "Try again"
+        configuration.baseBackgroundColor = .wildlifeAccent
+        configuration.baseForegroundColor = .white
         let button = UIButton(configuration: configuration)
         button.accessibilityLabel = "Retry loading observations"
         return button

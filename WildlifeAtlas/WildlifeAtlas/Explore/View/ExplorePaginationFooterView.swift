@@ -30,8 +30,10 @@ final class ExplorePaginationFooterView: UICollectionReusableView {
     }()
 
     private let retryButton: UIButton = {
-        var configuration = UIButton.Configuration.plain()
+        var configuration = UIButton.Configuration.tinted()
         configuration.title = "Try again"
+        configuration.baseBackgroundColor = .wildlifeAccentBackground
+        configuration.baseForegroundColor = .wildlifeAccent
         let button = UIButton(configuration: configuration)
         button.titleLabel?.numberOfLines = 1
         button.titleLabel?.lineBreakMode = .byTruncatingTail

@@ -184,4 +184,6 @@ extension UILabel {
 
 extension UIColor {
     static let wildlifePrimaryText = UIColor(red: 0.06, green: 0.22, blue: 0.12, alpha: 1.0)
+    static let wildlifeAccent = UIColor(red: 0.12, green: 0.43, blue: 0.23, alpha: 1.0)
+    static let wildlifeAccentBackground = UIColor(red: 0.87, green: 0.93, blue: 0.82, alpha: 1.0)
 }

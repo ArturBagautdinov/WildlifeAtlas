@@ -34,14 +34,15 @@ final class ExploreViewController: UIViewController {
     private let searchPlaceholderView: UIView = {
         let view = UIView()
         view.layer.cornerRadius = 20
-        view.layer.borderColor = UIColor.separator.cgColor
+        view.layer.borderColor = UIColor.wildlifeAccent.withAlphaComponent(0.28).cgColor
         view.layer.borderWidth = 1
+        view.backgroundColor = UIColor.wildlifeAccentBackground.withAlphaComponent(0.26)
         return view
     }()
 
     private let searchIconView: UIImageView = {
         let imageView = UIImageView(image: UIImage(systemName: "magnifyingglass"))
-        imageView.tintColor = .secondaryLabel
+        imageView.tintColor = .wildlifeAccent
         imageView.contentMode = .scaleAspectFit
         return imageView
     }()
