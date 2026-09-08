@@ -86,6 +86,32 @@ struct FavoritesViewModelTests {
         #expect(viewModel.state == .empty)
     }
 
+    @Test func staleFavoriteLoadDoesNotOverwriteCurrentFavorites() async {
+        let repository = DelayedFavoritesObservationsRepository()
+        let store = MockFavoritesStore(ids: [1, 2])
+        let viewModel = FavoritesViewModel(observationsRepository: repository, favoritesStore: store)
+
+        let initialTask = viewModel.loadFavorites()
+        await repository.waitForRequestCount(1)
+        store.removeFavorite(id: 1)
+
+        await repository.completeNext(with: .success([Self.observation(id: 1), Self.observation(id: 2)]))
+        await repository.waitForRequestCount(2)
+        await repository.completeNext(with: .success([Self.observation(id: 2)]))
+
+        await initialTask?.value
+        await repository.waitForAllCompletions()
+
+        #expect(await repository.requestedIDBatches == [[1, 2], [2]])
+
+        guard case .content(let items) = viewModel.state else {
+            Issue.record("Expected favorite content after reloading current IDs")
+            return
+        }
+
+        #expect(items.map(\.id) == [2])
+    }
+
     private static func observation(id: Int) -> Observation {
         Observation(
             id: id,
@@ -150,6 +176,74 @@ private nonisolated final class MockFavoritesObservationsRepository: Observation
 }
 
 private nonisolated struct FavoritesTestError: Error {}
+
+private actor DelayedFavoritesObservationsRepository: ObservationsRepository {
+    private var batches: [[Int]] = []
+    private var pendingContinuations: [CheckedContinuation<[Observation], Error>] = []
+    private var requestWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
+    private var completionWaiters: [CheckedContinuation<Void, Never>] = []
+
+    var requestedIDBatches: [[Int]] {
+        batches
+    }
+
+    func observations(page: Int, perPage: Int, filters: ObservationFilters) async throws -> PaginatedPage<Observation> {
+        PaginatedPage(values: [], page: page, perPage: perPage, totalResults: 0)
+    }
+
+    func observations(ids: [Int]) async throws -> [Observation] {
+        batches.append(ids)
+        resumeSatisfiedRequestWaiters()
+
+        return try await withCheckedThrowingContinuation { continuation in
+            pendingContinuations.append(continuation)
+        }
+    }
+
+    func observation(id: Int) async throws -> Observation {
+        throw FavoritesTestError()
+    }
+
+    func waitForRequestCount(_ count: Int) async {
+        guard batches.count < count else { return }
+
+        await withCheckedContinuation { continuation in
+            requestWaiters.append((count, continuation))
+        }
+    }
+
+    func completeNext(with result: Result<[Observation], Error>) {
+        guard pendingContinuations.isEmpty == false else { return }
+
+        let continuation = pendingContinuations.removeFirst()
+        continuation.resume(with: result)
+        resumeCompletionWaitersIfNeeded()
+    }
+
+    func waitForAllCompletions() async {
+        guard pendingContinuations.isEmpty == false else { return }
+
+        await withCheckedContinuation { continuation in
+            completionWaiters.append(continuation)
+        }
+    }
+
+    private func resumeSatisfiedRequestWaiters() {
+        let satisfiedWaiters = requestWaiters.filter { batches.count >= $0.0 }
+        requestWaiters.removeAll { batches.count >= $0.0 }
+        satisfiedWaiters.forEach { $0.1.resume() }
+    }
+
+    private func resumeCompletionWaitersIfNeeded() {
+        guard pendingContinuations.isEmpty else {
+            return
+        }
+
+        let waiters = completionWaiters
+        completionWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+    }
+}
 
 private nonisolated final class MockFavoritesStore: FavoritesStore {
     private let lock = NSLock()

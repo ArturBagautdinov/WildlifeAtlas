@@ -21,6 +21,7 @@ final class FavoritesViewModel {
     private var observations: [Observation] = []
     private var loadedFavoriteIDs: [Int] = []
     private var loadTask: Task<Void, Never>?
+    private var loadGeneration = UUID()
 
     private(set) var state: State = .empty {
         didSet { onStateChange?(state) }
@@ -36,6 +37,8 @@ final class FavoritesViewModel {
     @discardableResult
     func loadFavorites() -> Task<Void, Never>? {
         loadTask?.cancel()
+        loadGeneration = UUID()
+        let generation = loadGeneration
 
         let ids = favoritesStore.loadFavoriteIDs()
         guard ids.isEmpty == false else {
@@ -58,6 +61,18 @@ final class FavoritesViewModel {
             do {
                 let observations = try await observationsRepository.observations(ids: ids)
                 guard !Task.isCancelled else { return }
+                guard self.loadGeneration == generation else { return }
+                let currentIDs = self.favoritesStore.loadFavoriteIDs()
+                guard currentIDs == ids else {
+                    self.observations = []
+                    self.loadedFavoriteIDs = []
+                    if currentIDs.isEmpty {
+                        self.state = .empty
+                    } else {
+                        self.loadFavorites()
+                    }
+                    return
+                }
 
                 self.observations = observations
                 self.loadedFavoriteIDs = ids
@@ -74,6 +89,9 @@ final class FavoritesViewModel {
     }
 
     func removeFavorite(id: Int) {
+        loadTask?.cancel()
+        loadTask = nil
+        loadGeneration = UUID()
         favoritesStore.removeFavorite(id: id)
         observations.removeAll { $0.id == id }
         loadedFavoriteIDs.removeAll { $0 == id }
