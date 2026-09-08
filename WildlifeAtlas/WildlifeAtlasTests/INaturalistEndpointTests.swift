@@ -79,6 +79,8 @@ struct INaturalistEndpointTests {
         let endpoint = INaturalistEndpoint.observations(ids: [3, 1, 2])
 
         #expect(endpoint.path == "observations")
+        #expect(endpoint.queryValue(named: "page") == "1")
+        #expect(endpoint.queryValue(named: "per_page") == "3")
         #expect(endpoint.queryValue(named: "id") == "3,1,2")
         #expect(endpoint.queryValue(named: "captive") == "false")
     }

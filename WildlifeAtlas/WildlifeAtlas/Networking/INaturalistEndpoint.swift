@@ -35,9 +35,13 @@ nonisolated enum INaturalistEndpoint {
     }
 
     static func observations(ids: [Int]) -> APIEndpoint {
-        APIEndpoint(
+        let perPage = max(ids.count, 1)
+
+        return APIEndpoint(
             path: "observations",
             queryItems: [
+                URLQueryItem(name: "page", value: "1"),
+                URLQueryItem(name: "per_page", value: String(perPage)),
                 URLQueryItem(name: "id", value: ids.map(String.init).joined(separator: ",")),
                 URLQueryItem(name: "captive", value: "false")
             ]
