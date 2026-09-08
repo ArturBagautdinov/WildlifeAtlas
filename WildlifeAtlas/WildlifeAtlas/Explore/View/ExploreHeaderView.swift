@@ -45,6 +45,10 @@ final class ExploreHeaderView: UIView {
         textField.clearButtonMode = .whileEditing
         textField.returnKeyType = .search
         textField.tintColor = .wildlifeAccent
+        textField.layer.borderWidth = 2
+        textField.layer.borderColor = UIColor.wildlifePrimaryText.cgColor
+        textField.layer.cornerRadius = 14
+        textField.clipsToBounds = true
         textField.accessibilityLabel = "Search species"
         return textField
     }()
@@ -129,8 +133,8 @@ final class ExploreHeaderView: UIView {
             stackView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             searchContainerView.heightAnchor.constraint(equalToConstant: 44),
-            searchTextField.leadingAnchor.constraint(equalTo: searchContainerView.leadingAnchor, constant: 12),
-            searchTextField.trailingAnchor.constraint(equalTo: searchContainerView.trailingAnchor, constant: -12),
+            searchTextField.leadingAnchor.constraint(equalTo: searchContainerView.leadingAnchor, constant: 4),
+            searchTextField.trailingAnchor.constraint(equalTo: searchContainerView.trailingAnchor, constant: -4),
             searchTextField.topAnchor.constraint(equalTo: searchContainerView.topAnchor, constant: 2),
             searchTextField.bottomAnchor.constraint(equalTo: searchContainerView.bottomAnchor, constant: -2),
 

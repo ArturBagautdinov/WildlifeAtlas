@@ -27,7 +27,7 @@ final class ObservationDetailTaxonInfoView: UIView {
         fatalError("Use init(frame:) instead.")
     }
 
-    func configure(rows: [ObservationDetailContent.InfoRow]) {
+    func configure(rows: [ObservationDetailInfoRow]) {
         stackView.arrangedSubviews.forEach { view in
             stackView.removeArrangedSubview(view)
             view.removeFromSuperview()
