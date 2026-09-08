@@ -35,6 +35,14 @@ final class AppContainer {
         )
     }
 
+    func makeObservationDetailViewController(observationID: Int) -> ObservationDetailViewController {
+        let viewModel = ObservationDetailViewModel(
+            observationID: observationID,
+            observationsRepository: makeObservationsRepository()
+        )
+        return ObservationDetailViewController(viewModel: viewModel, imageLoader: imageLoader)
+    }
+
     func makeObservationsRepository() -> ObservationsRepository {
         RemoteObservationsRepository(apiClient: apiClient)
     }

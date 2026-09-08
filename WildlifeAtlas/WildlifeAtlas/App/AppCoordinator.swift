@@ -20,9 +20,17 @@ final class AppCoordinator {
 
     func start() {
         let exploreViewController = appContainer.makeExploreViewController()
+        exploreViewController.onObservationSelected = { [weak self] observationID in
+            self?.showObservationDetail(observationID: observationID)
+        }
         navigationController.setViewControllers([exploreViewController], animated: false)
 
         window.rootViewController = navigationController
         window.makeKeyAndVisible()
+    }
+
+    private func showObservationDetail(observationID: Int) {
+        let viewController = appContainer.makeObservationDetailViewController(observationID: observationID)
+        navigationController.pushViewController(viewController, animated: true)
     }
 }
