@@ -363,6 +363,53 @@ struct ExploreViewModelTests {
         #expect(repository.calls.map(\.filters.taxon?.id) == [104, 105])
     }
 
+    @Test func loadedItemsExposeFavoriteState() async {
+        let repository = MockObservationsRepository(results: [
+            .success(Self.page(values: [Self.observation(id: 1), Self.observation(id: 2)], page: 1, total: 2))
+        ])
+        let favoritesStore = MockExploreFavoritesStore(ids: [2])
+        let viewModel = ExploreViewModel(
+            observationsRepository: repository,
+            favoritesStore: favoritesStore,
+            perPage: 2
+        )
+
+        await viewModel.loadInitialObservations().value
+
+        guard case .content(let items) = viewModel.state else {
+            Issue.record("Expected content state")
+            return
+        }
+
+        #expect(items.first { $0.id == 1 }?.isFavorite == false)
+        #expect(items.first { $0.id == 2 }?.isFavorite == true)
+    }
+
+    @Test func togglingFavoriteUpdatesStoreAndVisibleStateWithoutReloading() async {
+        let repository = MockObservationsRepository(results: [
+            .success(Self.page(values: [Self.observation(id: 1)], page: 1, total: 1))
+        ])
+        let favoritesStore = MockExploreFavoritesStore()
+        let viewModel = ExploreViewModel(
+            observationsRepository: repository,
+            favoritesStore: favoritesStore,
+            perPage: 2
+        )
+
+        await viewModel.loadInitialObservations().value
+        viewModel.toggleFavorite(id: 1)
+
+        #expect(favoritesStore.loadFavoriteIDs() == [1])
+        #expect(repository.calls.map(\.page) == [1])
+
+        guard case .content(let items) = viewModel.state else {
+            Issue.record("Expected content state")
+            return
+        }
+
+        #expect(items.first?.isFavorite == true)
+    }
+
     private static func page(
         values: [Observation],
         page: Int,
@@ -410,6 +457,42 @@ struct ExploreViewModelTests {
 }
 
 private nonisolated struct TestError: Error {}
+
+private nonisolated final class MockExploreFavoritesStore: FavoritesStore {
+    private let lock = NSLock()
+    private var ids: [Int]
+
+    init(ids: [Int] = []) {
+        self.ids = ids
+    }
+
+    func loadFavoriteIDs() -> [Int] {
+        withLock { ids }
+    }
+
+    func isFavorite(id: Int) -> Bool {
+        loadFavoriteIDs().contains(id)
+    }
+
+    func addFavorite(id: Int) {
+        withLock {
+            ids.removeAll { $0 == id }
+            ids.insert(id, at: 0)
+        }
+    }
+
+    func removeFavorite(id: Int) {
+        withLock {
+            ids.removeAll { $0 == id }
+        }
+    }
+
+    private func withLock<Value>(_ work: () throws -> Value) rethrows -> Value {
+        lock.lock()
+        defer { lock.unlock() }
+        return try work()
+    }
+}
 
 private nonisolated final class MockObservationsRepository: ObservationsRepository {
     struct Call: Equatable {
@@ -467,6 +550,10 @@ private nonisolated final class MockObservationsRepository: ObservationsReposito
 
     func observation(id: Int) async throws -> Observation {
         throw TestError()
+    }
+
+    func observations(ids: [Int]) async throws -> [Observation] {
+        []
     }
 
     private func withLock<Value>(_ work: () throws -> Value) rethrows -> Value {

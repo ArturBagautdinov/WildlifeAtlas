@@ -15,8 +15,9 @@ nonisolated struct ExploreObservationItem: Hashable, Identifiable {
     let observedDate: String?
     let qualityText: String?
     let qualitySymbol: String?
+    let isFavorite: Bool
 
-    init(observation: Observation) {
+    init(observation: Observation, isFavorite: Bool = false) {
         self.id = observation.id
         self.imageURL = observation.photos.first?.mediumURL ?? observation.photos.first?.squareURL
         self.commonName = Self.visibleText(observation.taxon?.commonName)
@@ -24,6 +25,7 @@ nonisolated struct ExploreObservationItem: Hashable, Identifiable {
         self.observedDate = Self.formattedDate(from: observation.observedOn)
         self.qualityText = observation.quality?.displayText
         self.qualitySymbol = observation.quality?.displaySymbol
+        self.isFavorite = isFavorite
     }
 
     var accessibilityLabel: String {

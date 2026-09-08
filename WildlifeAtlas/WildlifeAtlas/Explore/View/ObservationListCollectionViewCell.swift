@@ -20,6 +20,8 @@ final class ObservationListCollectionViewCell: UICollectionViewCell {
     private let scientificNameLabel = ObservationTextLabel(font: .italicSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize), color: .secondaryLabel, lines: 1)
     private let dateRow = ObservationMetadataRow(systemImageName: "calendar")
     private let qualityBadgeView = ObservationQualityBadgeView()
+    private let favoriteButton = ObservationFavoriteButton()
+    private var onFavoriteTapped: (() -> Void)?
     private lazy var metadataStackView: UIStackView = {
         let stackView = UIStackView(arrangedSubviews: [dateRow])
         stackView.axis = .vertical
@@ -43,14 +45,17 @@ final class ObservationListCollectionViewCell: UICollectionViewCell {
         previewImageView.cancelImageLoad()
         previewImageView.isHidden = false
         previewWidthConstraint?.constant = Self.previewImageSize
+        onFavoriteTapped = nil
     }
 
-    func configure(with item: ExploreObservationItem, imageLoader: ImageLoader) {
+    func configure(with item: ExploreObservationItem, imageLoader: ImageLoader, onFavoriteTapped: @escaping () -> Void) {
         commonNameLabel.setVisibleText(item.commonName)
         scientificNameLabel.setVisibleText(item.scientificName)
         dateRow.setText(item.observedDate)
         metadataStackView.isHidden = item.observedDate == nil
         qualityBadgeView.configure(symbol: item.qualitySymbol, text: item.qualityText)
+        favoriteButton.setFavorite(item.isFavorite)
+        self.onFavoriteTapped = onFavoriteTapped
 
         isAccessibilityElement = true
         accessibilityLabel = item.accessibilityLabel
@@ -73,7 +78,8 @@ final class ObservationListCollectionViewCell: UICollectionViewCell {
             commonNameLabel,
             scientificNameLabel,
             metadataStackView,
-            qualityBadgeView
+            qualityBadgeView,
+            favoriteButton
         ].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             cardView.addSubview($0)
@@ -95,7 +101,7 @@ final class ObservationListCollectionViewCell: UICollectionViewCell {
 
             commonNameLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 14),
             commonNameLabel.leadingAnchor.constraint(equalTo: previewImageView.trailingAnchor, constant: 14),
-            commonNameLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -14),
+            commonNameLabel.trailingAnchor.constraint(equalTo: favoriteButton.leadingAnchor, constant: -10),
 
             scientificNameLabel.topAnchor.constraint(equalTo: commonNameLabel.bottomAnchor, constant: 6),
             scientificNameLabel.leadingAnchor.constraint(equalTo: commonNameLabel.leadingAnchor),
@@ -108,13 +114,24 @@ final class ObservationListCollectionViewCell: UICollectionViewCell {
             qualityBadgeView.widthAnchor.constraint(equalToConstant: Self.qualityBadgeSize.width),
             qualityBadgeView.heightAnchor.constraint(equalToConstant: Self.qualityBadgeSize.height),
             qualityBadgeView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -8),
-            qualityBadgeView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -8)
+            qualityBadgeView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -8),
+
+            favoriteButton.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 10),
+            favoriteButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -10),
+            favoriteButton.widthAnchor.constraint(equalToConstant: 32),
+            favoriteButton.heightAnchor.constraint(equalToConstant: 32)
         ])
+
+        favoriteButton.addTarget(self, action: #selector(favoriteTapped), for: .touchUpInside)
     }
 
     private func configureImage(from url: URL?, imageLoader: ImageLoader) {
         previewImageView.isHidden = false
         previewWidthConstraint?.constant = Self.previewImageSize
         previewImageView.loadImage(from: url, imageLoader: imageLoader)
+    }
+
+    @objc private func favoriteTapped() {
+        onFavoriteTapped?()
     }
 }

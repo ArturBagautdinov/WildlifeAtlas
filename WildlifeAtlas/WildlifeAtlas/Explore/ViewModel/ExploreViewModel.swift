@@ -22,6 +22,7 @@ final class ExploreViewModel {
     }
 
     private let observationsRepository: ObservationsRepository
+    private let favoritesStore: FavoritesStore
     private let perPage: Int
     private var observations: [Observation] = []
     private var currentPage = 0
@@ -51,13 +52,23 @@ final class ExploreViewModel {
     var onDisplayModeChange: ((ExploreDisplayMode) -> Void)?
     var onFiltersChange: ((ObservationFilters) -> Void)?
 
-    init(observationsRepository: ObservationsRepository, perPage: Int = 20) {
+    init(
+        observationsRepository: ObservationsRepository,
+        favoritesStore: FavoritesStore = EmptyFavoritesStore(),
+        perPage: Int = 20
+    ) {
         self.observationsRepository = observationsRepository
+        self.favoritesStore = favoritesStore
         self.perPage = perPage
     }
 
     var loadedItems: [ExploreObservationItem] {
-        observations.map(ExploreObservationItem.init(observation:))
+        observations.map { observation in
+            ExploreObservationItem(
+                observation: observation,
+                isFavorite: favoritesStore.isFavorite(id: observation.id)
+            )
+        }
     }
 
     var currentPageNumber: Int {
@@ -163,6 +174,21 @@ final class ExploreViewModel {
         displayMode = mode
     }
 
+    func toggleFavorite(id: Int) {
+        if favoritesStore.isFavorite(id: id) {
+            favoritesStore.removeFavorite(id: id)
+        } else {
+            favoritesStore.addFavorite(id: id)
+        }
+
+        refreshFavoriteState()
+    }
+
+    func refreshFavoriteState() {
+        guard case .content = state else { return }
+        state = .content(loadedItems)
+    }
+
     @discardableResult
     func setTaxonFilter(_ taxon: Taxon?) -> Task<Void, Never>? {
         updateFilters {
@@ -221,6 +247,13 @@ final class ExploreViewModel {
         filters = updatedFilters
         return loadInitialObservations()
     }
+}
+
+private nonisolated final class EmptyFavoritesStore: FavoritesStore {
+    func loadFavoriteIDs() -> [Int] { [] }
+    func isFavorite(id: Int) -> Bool { false }
+    func addFavorite(id: Int) {}
+    func removeFavorite(id: Int) {}
 }
 
 nonisolated struct ExploreErrorViewModel: Equatable {

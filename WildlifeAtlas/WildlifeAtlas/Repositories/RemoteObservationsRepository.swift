@@ -40,4 +40,15 @@ nonisolated final class RemoteObservationsRepository: ObservationsRepository {
 
         return observation
     }
+
+    func observations(ids: [Int]) async throws -> [Observation] {
+        guard ids.isEmpty == false else { return [] }
+
+        let endpoint = INaturalistEndpoint.observations(ids: ids)
+        let response: PaginatedResponseDTO<ObservationDTO> = try await apiClient.request(endpoint)
+        let observations = response.results.map { $0.toDomain() }
+        let observationsByID = Dictionary(uniqueKeysWithValues: observations.map { ($0.id, $0) })
+
+        return ids.compactMap { observationsByID[$0] }
+    }
 }
