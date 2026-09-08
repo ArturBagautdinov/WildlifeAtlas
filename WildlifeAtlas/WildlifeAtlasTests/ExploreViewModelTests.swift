@@ -13,6 +13,112 @@ import Testing
 @Suite(.serialized)
 struct ExploreViewModelTests {
 
+    @Test func initialStateIsLoading() {
+        let viewModel = ExploreViewModel(observationsRepository: MockObservationsRepository())
+
+        #expect(viewModel.state == .loading)
+    }
+
+    @Test func successfulInitialLoadRequestsFirstPageAndShowsContent() async {
+        let repository = MockObservationsRepository(results: [
+            .success(Self.page(values: [Self.observation(id: 1), Self.observation(id: 2)], page: 1, perPage: 12, total: 2))
+        ])
+        let viewModel = ExploreViewModel(observationsRepository: repository, perPage: 12)
+        var states: [ExploreViewModel.State] = []
+        viewModel.onStateChange = { states.append($0) }
+
+        await viewModel.loadInitialObservations().value
+
+        #expect(repository.calls == [
+            MockObservationsRepository.Call(page: 1, perPage: 12, filters: ObservationFilters.defaultValue)
+        ])
+        #expect(states.count == 2)
+        #expect(states.first == .loading)
+
+        guard case .content(let items) = viewModel.state else {
+            Issue.record("Expected content state")
+            return
+        }
+
+        #expect(items.map(\.id) == [1, 2])
+        #expect(items.first?.commonName == "Common 1")
+        #expect(items.first?.scientificName == "Species 1")
+        #expect(items.first?.observedDate == "7 Sep 2026")
+        #expect(items.first?.qualityText == "Excellent")
+        #expect(items.first?.qualitySymbol == "A")
+    }
+
+    @Test func emptyInitialLoadShowsEmptyState() async {
+        let repository = MockObservationsRepository(results: [
+            .success(Self.page(values: [], page: 1, total: 0))
+        ])
+        let viewModel = ExploreViewModel(observationsRepository: repository)
+        var states: [ExploreViewModel.State] = []
+        viewModel.onStateChange = { states.append($0) }
+
+        await viewModel.loadInitialObservations().value
+
+        #expect(viewModel.state == .empty)
+        #expect(states == [.loading, .empty])
+    }
+
+    @Test func failedInitialLoadShowsErrorState() async {
+        let repository = MockObservationsRepository(results: [
+            .failure(TestError())
+        ])
+        let viewModel = ExploreViewModel(observationsRepository: repository)
+        var states: [ExploreViewModel.State] = []
+        viewModel.onStateChange = { states.append($0) }
+
+        await viewModel.loadInitialObservations().value
+
+        #expect(viewModel.state == .error(.initialLoadFailed))
+        #expect(states == [.loading, .error(.initialLoadFailed)])
+    }
+
+    @Test func retryPerformsAnotherInitialRepositoryRequest() async {
+        let repository = MockObservationsRepository(results: [
+            .failure(TestError()),
+            .success(Self.page(values: [Self.observation(id: 3)], page: 1, total: 1))
+        ])
+        let viewModel = ExploreViewModel(observationsRepository: repository)
+
+        await viewModel.loadInitialObservations().value
+        await viewModel.loadInitialObservations().value
+
+        #expect(repository.calls.map(\.page) == [1, 1])
+
+        guard case .content(let items) = viewModel.state else {
+            Issue.record("Expected content state after retry")
+            return
+        }
+        #expect(items.map(\.id) == [3])
+    }
+
+    @Test func missingOptionalFieldsRemainAbsentInPresentationModel() {
+        let item = ExploreObservationItem(
+            observation: Observation(
+                id: 10,
+                uri: nil,
+                quality: nil,
+                observedOn: nil,
+                observedAt: nil,
+                taxon: nil,
+                photos: [],
+                author: nil,
+                location: nil
+            )
+        )
+
+        #expect(item.commonName == nil)
+        #expect(item.scientificName == nil)
+        #expect(item.observedDate == nil)
+        #expect(item.qualityText == nil)
+        #expect(item.qualitySymbol == nil)
+        #expect(item.imageURL == nil)
+        #expect(item.accessibilityLabel.isEmpty)
+    }
+
     @Test func firstAndSecondPagesAccumulateInOrder() async {
         let repository = MockObservationsRepository(results: [
             .success(Self.page(values: [Self.observation(id: 1), Self.observation(id: 2)], page: 1, total: 4)),
@@ -149,8 +255,13 @@ struct ExploreViewModelTests {
         #expect(viewModel.canRequestNextPage == false)
     }
 
-    private static func page(values: [Observation], page: Int, total: Int) -> PaginatedPage<Observation> {
-        PaginatedPage(values: values, page: page, perPage: 2, totalResults: total)
+    private static func page(
+        values: [Observation],
+        page: Int,
+        perPage: Int = 2,
+        total: Int
+    ) -> PaginatedPage<Observation> {
+        PaginatedPage(values: values, page: page, perPage: perPage, totalResults: total)
     }
 
     private static func observation(id: Int) -> Observation {
@@ -181,7 +292,7 @@ struct ExploreViewModelTests {
                 )
             ],
             author: nil,
-            location: ObservationLocationSummary(placeName: "Place \(id)")
+            location: nil
         )
     }
 }
@@ -200,12 +311,10 @@ private nonisolated final class MockObservationsRepository: ObservationsReposito
     private var recordedCalls: [Call] = []
 
     var calls: [Call] {
-        lock.lock()
-        defer { lock.unlock() }
-        return recordedCalls
+        withLock { recordedCalls }
     }
 
-    init(results: [Result<PaginatedPage<Observation>, Error>]) {
+    init(results: [Result<PaginatedPage<Observation>, Error>] = []) {
         self.results = results
     }
 
@@ -214,10 +323,12 @@ private nonisolated final class MockObservationsRepository: ObservationsReposito
         perPage: Int,
         filters: ObservationFilters
     ) async throws -> PaginatedPage<Observation> {
-        lock.lock()
-        recordedCalls.append(Call(page: page, perPage: perPage, filters: filters))
-        let result = results.removeFirst()
-        lock.unlock()
+        let result: Result<PaginatedPage<Observation>, Error> = withLock {
+            recordedCalls.append(Call(page: page, perPage: perPage, filters: filters))
+            return results.isEmpty
+                ? .success(PaginatedPage(values: [], page: page, perPage: perPage, totalResults: 0))
+                : results.removeFirst()
+        }
 
         await Task.yield()
         return try result.get()
@@ -225,5 +336,11 @@ private nonisolated final class MockObservationsRepository: ObservationsReposito
 
     func observation(id: Int) async throws -> Observation {
         throw TestError()
+    }
+
+    private func withLock<Value>(_ work: () throws -> Value) rethrows -> Value {
+        lock.lock()
+        defer { lock.unlock() }
+        return try work()
     }
 }
