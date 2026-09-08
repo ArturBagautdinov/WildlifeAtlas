@@ -18,6 +18,7 @@ final class ExploreViewController: UIViewController {
     private var dataSource: UICollectionViewDiffableDataSource<ExploreSection, ExploreObservationItem>?
 
     var onTaxonSelected: ((Taxon) -> Void)?
+    var onObservationSelected: ((Int) -> Void)?
 
     private lazy var collectionView = UICollectionView(
         frame: .zero,
@@ -311,6 +312,12 @@ extension ExploreViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         let item = dataSource?.itemIdentifier(for: indexPath)
         viewModel.loadNextPageIfNeeded(currentItemID: item?.id)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        guard let item = dataSource?.itemIdentifier(for: indexPath) else { return }
+        onObservationSelected?(item.id)
+        collectionView.deselectItem(at: indexPath, animated: true)
     }
 }
 
