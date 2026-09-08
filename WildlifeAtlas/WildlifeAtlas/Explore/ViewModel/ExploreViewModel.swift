@@ -28,6 +28,7 @@ final class ExploreViewModel {
     private var canLoadMore = true
     private var initialLoadTask: Task<Void, Never>?
     private var nextPageTask: Task<Void, Never>?
+    private var loadGeneration = UUID()
 
     private(set) var state: State = .loading {
         didSet { onStateChange?(state) }
@@ -37,6 +38,10 @@ final class ExploreViewModel {
         didSet { onDisplayModeChange?(displayMode) }
     }
 
+    private(set) var filters: ObservationFilters = .defaultValue {
+        didSet { onFiltersChange?(filters) }
+    }
+
     private(set) var paginationState = PaginationState(isLoadingNextPage: false, error: nil) {
         didSet { onPaginationStateChange?(paginationState) }
     }
@@ -44,6 +49,7 @@ final class ExploreViewModel {
     var onStateChange: ((State) -> Void)?
     var onPaginationStateChange: ((PaginationState) -> Void)?
     var onDisplayModeChange: ((ExploreDisplayMode) -> Void)?
+    var onFiltersChange: ((ObservationFilters) -> Void)?
 
     init(observationsRepository: ObservationsRepository, perPage: Int = 20) {
         self.observationsRepository = observationsRepository
@@ -70,6 +76,7 @@ final class ExploreViewModel {
     func loadInitialObservations() -> Task<Void, Never> {
         initialLoadTask?.cancel()
         nextPageTask?.cancel()
+        loadGeneration = UUID()
 
         state = .loading
         paginationState = PaginationState(isLoadingNextPage: false, error: nil)
@@ -77,6 +84,8 @@ final class ExploreViewModel {
         currentPage = 0
         canLoadMore = true
 
+        let requestedFilters = filters
+        let generation = loadGeneration
         let task = Task { [weak self] in
             guard let self else { return }
 
@@ -84,9 +93,9 @@ final class ExploreViewModel {
                 let page = try await observationsRepository.observations(
                     page: 1,
                     perPage: perPage,
-                    filters: .defaultValue
+                    filters: requestedFilters
                 )
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, generation == loadGeneration, requestedFilters == filters else { return }
 
                 observations = page.values
                 currentPage = page.page
@@ -95,7 +104,7 @@ final class ExploreViewModel {
                 let items = loadedItems
                 state = items.isEmpty ? .empty : .content(items)
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, generation == loadGeneration, requestedFilters == filters else { return }
                 observations = []
                 currentPage = 0
                 canLoadMore = true
@@ -115,6 +124,8 @@ final class ExploreViewModel {
 
         paginationState = PaginationState(isLoadingNextPage: true, error: nil)
         let nextPage = currentPage + 1
+        let requestedFilters = filters
+        let generation = loadGeneration
 
         let task = Task { [weak self] in
             guard let self else { return }
@@ -123,16 +134,16 @@ final class ExploreViewModel {
                 let page = try await observationsRepository.observations(
                     page: nextPage,
                     perPage: perPage,
-                    filters: .defaultValue
+                    filters: requestedFilters
                 )
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, generation == loadGeneration, requestedFilters == filters else { return }
 
                 append(page)
                 paginationState = PaginationState(isLoadingNextPage: false, error: nil)
                 state = .content(loadedItems)
                 nextPageTask = nil
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, generation == loadGeneration, requestedFilters == filters else { return }
                 paginationState = PaginationState(isLoadingNextPage: false, error: .nextPageFailed)
                 nextPageTask = nil
             }
@@ -150,6 +161,27 @@ final class ExploreViewModel {
     func setDisplayMode(_ mode: ExploreDisplayMode) {
         guard displayMode != mode else { return }
         displayMode = mode
+    }
+
+    @discardableResult
+    func setTaxonFilter(_ taxon: Taxon?) -> Task<Void, Never>? {
+        updateFilters {
+            $0.taxon = taxon
+        }
+    }
+
+    @discardableResult
+    func setQualityFilter(_ quality: ObservationQualityFilter) -> Task<Void, Never>? {
+        updateFilters {
+            $0.quality = quality
+        }
+    }
+
+    @discardableResult
+    func setSortOrder(_ sortOrder: ObservationSortOrder) -> Task<Void, Never>? {
+        updateFilters {
+            $0.sortOrder = sortOrder
+        }
     }
 
     private func shouldLoadNextPage(currentItemID: Int?) -> Bool {
@@ -175,6 +207,19 @@ final class ExploreViewModel {
         observations.append(contentsOf: uniqueNewObservations)
         currentPage = page.page
         canLoadMore = page.hasNextPage
+    }
+
+    @discardableResult
+    private func updateFilters(_ update: (inout ObservationFilters) -> Void) -> Task<Void, Never>? {
+        var updatedFilters = filters
+        update(&updatedFilters)
+
+        guard updatedFilters != filters else {
+            return nil
+        }
+
+        filters = updatedFilters
+        return loadInitialObservations()
     }
 }
 

@@ -12,6 +12,9 @@ final class ExploreHeaderView: UIView {
     var onSearchTextChanged: ((String) -> Void)?
     var onSearchCleared: (() -> Void)?
     var onSearchReturned: (() -> Void)?
+    var onTaxonCleared: (() -> Void)?
+    var onQualityChanged: ((ObservationQualityFilter) -> Void)?
+    var onSortOrderChanged: ((ObservationSortOrder) -> Void)?
     var onDisplayModeChanged: ((ExploreDisplayMode) -> Void)?
 
     var searchAnchorView: UIView {
@@ -61,6 +64,7 @@ final class ExploreHeaderView: UIView {
         super.init(frame: frame)
         configureHierarchy()
         configureActions()
+        setFilters(.defaultValue)
     }
 
     @available(*, unavailable)
@@ -81,20 +85,34 @@ final class ExploreHeaderView: UIView {
         modeControl.accessibilityValue = mode == .list ? "List" : "Grid"
     }
 
+    func setFilters(_ filters: ObservationFilters) {
+        taxonChip.setTitle(Self.taxonTitle(for: filters.taxon))
+        qualityChip.setTitle(Self.qualityTitle(for: filters.quality))
+        sortChip.setTitle(Self.sortTitle(for: filters.sortOrder))
+        configureFilterMenus(selectedFilters: filters)
+    }
+
     private func configureHierarchy() {
         searchTextField.translatesAutoresizingMaskIntoConstraints = false
         searchContainerView.addSubview(searchTextField)
 
+        let chipsScrollView = UIScrollView()
+        chipsScrollView.showsHorizontalScrollIndicator = false
+        chipsScrollView.alwaysBounceHorizontal = true
+        chipsScrollView.translatesAutoresizingMaskIntoConstraints = false
+
         let chipsStackView = UIStackView(arrangedSubviews: [taxonChip, qualityChip, sortChip])
         chipsStackView.axis = .horizontal
         chipsStackView.alignment = .center
-        chipsStackView.distribution = .fillEqually
-        chipsStackView.spacing = 12
+        chipsStackView.distribution = .fill
+        chipsStackView.spacing = 8
+        chipsStackView.translatesAutoresizingMaskIntoConstraints = false
+        chipsScrollView.addSubview(chipsStackView)
 
         let stackView = UIStackView(arrangedSubviews: [
             titleLabel,
             searchContainerView,
-            chipsStackView,
+            chipsScrollView,
             modeControl
         ])
         stackView.axis = .vertical
@@ -116,6 +134,13 @@ final class ExploreHeaderView: UIView {
             searchTextField.topAnchor.constraint(equalTo: searchContainerView.topAnchor, constant: 2),
             searchTextField.bottomAnchor.constraint(equalTo: searchContainerView.bottomAnchor, constant: -2),
 
+            chipsScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            chipsStackView.topAnchor.constraint(equalTo: chipsScrollView.contentLayoutGuide.topAnchor),
+            chipsStackView.leadingAnchor.constraint(equalTo: chipsScrollView.contentLayoutGuide.leadingAnchor),
+            chipsStackView.trailingAnchor.constraint(equalTo: chipsScrollView.contentLayoutGuide.trailingAnchor),
+            chipsStackView.bottomAnchor.constraint(equalTo: chipsScrollView.contentLayoutGuide.bottomAnchor),
+            chipsStackView.heightAnchor.constraint(equalTo: chipsScrollView.frameLayoutGuide.heightAnchor),
+
             modeControl.heightAnchor.constraint(greaterThanOrEqualToConstant: 36)
         ])
     }
@@ -124,6 +149,73 @@ final class ExploreHeaderView: UIView {
         searchTextField.delegate = self
         searchTextField.addTarget(self, action: #selector(searchTextDidChange), for: .editingChanged)
         modeControl.addTarget(self, action: #selector(displayModeChanged), for: .valueChanged)
+    }
+
+    private func configureFilterMenus(selectedFilters: ObservationFilters) {
+        taxonChip.setMenu(UIMenu(children: [
+            UIAction(
+                title: "All observations",
+                state: selectedFilters.taxon == nil ? .on : .off
+            ) { [weak self] _ in
+                self?.onTaxonCleared?()
+            }
+        ]))
+
+        qualityChip.setMenu(UIMenu(children: [
+            UIAction(
+                title: "Any",
+                state: selectedFilters.quality == .any ? .on : .off
+            ) { [weak self] _ in
+                self?.onQualityChanged?(.any)
+            },
+            UIAction(
+                title: "Research Grade",
+                state: selectedFilters.quality == .research ? .on : .off
+            ) { [weak self] _ in
+                self?.onQualityChanged?(.research)
+            }
+        ]))
+
+        sortChip.setMenu(UIMenu(children: [
+            UIAction(
+                title: "Newest first",
+                state: selectedFilters.sortOrder == .newestFirst ? .on : .off
+            ) { [weak self] _ in
+                self?.onSortOrderChanged?(.newestFirst)
+            },
+            UIAction(
+                title: "Oldest first",
+                state: selectedFilters.sortOrder == .oldestFirst ? .on : .off
+            ) { [weak self] _ in
+                self?.onSortOrderChanged?(.oldestFirst)
+            }
+        ]))
+    }
+
+    private static func taxonTitle(for taxon: Taxon?) -> String {
+        guard let taxon else {
+            return "All wildlife"
+        }
+
+        return taxon.commonName ?? taxon.scientificName
+    }
+
+    private static func qualityTitle(for quality: ObservationQualityFilter) -> String {
+        switch quality {
+        case .any:
+            return "Any grade"
+        case .research:
+            return "Research"
+        }
+    }
+
+    private static func sortTitle(for sortOrder: ObservationSortOrder) -> String {
+        switch sortOrder {
+        case .newestFirst:
+            return "Newest"
+        case .oldestFirst:
+            return "Oldest"
+        }
     }
 
     @objc private func searchTextDidChange() {
