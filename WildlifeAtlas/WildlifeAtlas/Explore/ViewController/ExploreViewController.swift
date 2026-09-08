@@ -63,6 +63,7 @@ final class ExploreViewController: UIViewController {
         }
         render(state: viewModel.state)
         render(paginationState: viewModel.paginationState)
+        headerView.setFilters(viewModel.filters)
         viewModel.loadInitialObservations()
     }
 
@@ -182,6 +183,9 @@ final class ExploreViewController: UIViewController {
         viewModel.onDisplayModeChange = { [weak self] mode in
             self?.applyDisplayMode(mode)
         }
+        viewModel.onFiltersChange = { [weak self] filters in
+            self?.headerView.setFilters(filters)
+        }
         headerView.onSearchBegan = { [weak self] text in
             self?.handleSearchBegan(text: text)
         }
@@ -194,6 +198,17 @@ final class ExploreViewController: UIViewController {
         headerView.onSearchReturned = { [weak self] in
             self?.taxonSearchPanelView.hide()
         }
+        headerView.onTaxonCleared = { [weak self] in
+            self?.headerView.setSearchText("")
+            self?.taxonSearchPanelView.hide()
+            self?.viewModel.setTaxonFilter(nil)
+        }
+        headerView.onQualityChanged = { [weak self] quality in
+            self?.viewModel.setQualityFilter(quality)
+        }
+        headerView.onSortOrderChanged = { [weak self] sortOrder in
+            self?.viewModel.setSortOrder(sortOrder)
+        }
         headerView.onDisplayModeChanged = { [weak self] mode in
             self?.viewModel.setDisplayMode(mode)
         }
@@ -204,6 +219,7 @@ final class ExploreViewController: UIViewController {
             self?.headerView.setSearchText(taxon.commonName ?? taxon.scientificName)
             self?.headerView.resignSearchFocus()
             self?.taxonSearchPanelView.hide()
+            self?.viewModel.setTaxonFilter(taxon)
             self?.onTaxonSelected?(taxon)
         }
         taxonSearchPanelView.onItemSelected = { [weak self] id in

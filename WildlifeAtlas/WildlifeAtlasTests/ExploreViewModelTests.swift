@@ -255,6 +255,114 @@ struct ExploreViewModelTests {
         #expect(viewModel.canRequestNextPage == false)
     }
 
+    @Test func changingTaxonPreservesQualityAndOrder() async {
+        let repository = MockObservationsRepository()
+        let viewModel = ExploreViewModel(observationsRepository: repository, perPage: 2)
+        let taxon = Self.taxon(id: 100, commonName: "Red Fox")
+
+        await viewModel.setQualityFilter(.research)?.value
+        await viewModel.setSortOrder(.oldestFirst)?.value
+        await viewModel.setTaxonFilter(taxon)?.value
+
+        #expect(viewModel.filters.taxon == taxon)
+        #expect(viewModel.filters.quality == .research)
+        #expect(viewModel.filters.sortOrder == .oldestFirst)
+        #expect(repository.calls.last?.filters == viewModel.filters)
+    }
+
+    @Test func changingQualityPreservesTaxonAndOrder() async {
+        let repository = MockObservationsRepository()
+        let viewModel = ExploreViewModel(observationsRepository: repository, perPage: 2)
+        let taxon = Self.taxon(id: 101, commonName: "Mallard")
+
+        await viewModel.setTaxonFilter(taxon)?.value
+        await viewModel.setSortOrder(.oldestFirst)?.value
+        await viewModel.setQualityFilter(.research)?.value
+
+        #expect(viewModel.filters.taxon == taxon)
+        #expect(viewModel.filters.quality == .research)
+        #expect(viewModel.filters.sortOrder == .oldestFirst)
+        #expect(repository.calls.last?.filters == viewModel.filters)
+    }
+
+    @Test func changingOrderPreservesTaxonAndQuality() async {
+        let repository = MockObservationsRepository()
+        let viewModel = ExploreViewModel(observationsRepository: repository, perPage: 2)
+        let taxon = Self.taxon(id: 102, commonName: "Monarch")
+
+        await viewModel.setTaxonFilter(taxon)?.value
+        await viewModel.setQualityFilter(.research)?.value
+        await viewModel.setSortOrder(.oldestFirst)?.value
+
+        #expect(viewModel.filters.taxon == taxon)
+        #expect(viewModel.filters.quality == .research)
+        #expect(viewModel.filters.sortOrder == .oldestFirst)
+        #expect(repository.calls.last?.filters == viewModel.filters)
+    }
+
+    @Test func filterChangeResetsPaginationToFirstPage() async {
+        let repository = MockObservationsRepository(results: [
+            .success(Self.page(values: [Self.observation(id: 1), Self.observation(id: 2)], page: 1, total: 4)),
+            .success(Self.page(values: [Self.observation(id: 3), Self.observation(id: 4)], page: 2, total: 4)),
+            .success(Self.page(values: [Self.observation(id: 5)], page: 1, total: 1))
+        ])
+        let viewModel = ExploreViewModel(observationsRepository: repository, perPage: 2)
+
+        await viewModel.loadInitialObservations().value
+        await viewModel.loadNextPageIfNeeded(currentItemID: 2)?.value
+        await viewModel.setQualityFilter(.research)?.value
+
+        #expect(repository.calls.map(\.page) == [1, 2, 1])
+        #expect(viewModel.currentPageNumber == 1)
+        #expect(viewModel.loadedItems.map(\.id) == [5])
+    }
+
+    @Test func filterChangeReloadsUsingCompleteCurrentFilters() async {
+        let repository = MockObservationsRepository(results: [
+            .success(Self.page(values: [Self.observation(id: 1)], page: 1, total: 1)),
+            .success(Self.page(values: [Self.observation(id: 2)], page: 1, total: 1))
+        ])
+        let viewModel = ExploreViewModel(observationsRepository: repository, perPage: 2)
+        let taxon = Self.taxon(id: 103, commonName: "Gray Wolf")
+
+        await viewModel.loadInitialObservations().value
+        await viewModel.setTaxonFilter(taxon)?.value
+
+        #expect(repository.calls == [
+            MockObservationsRepository.Call(page: 1, perPage: 2, filters: .defaultValue),
+            MockObservationsRepository.Call(
+                page: 1,
+                perPage: 2,
+                filters: ObservationFilters(taxon: taxon, quality: .any, sortOrder: .newestFirst)
+            )
+        ])
+        #expect(viewModel.loadedItems.map(\.id) == [2])
+    }
+
+    @Test func stalePreviousFilterResultsCannotOverwriteNewerResults() async {
+        let oldTaxon = Self.taxon(id: 104, commonName: "Old Taxon")
+        let newTaxon = Self.taxon(id: 105, commonName: "New Taxon")
+        let repository = MockObservationsRepository(
+            results: [
+                .success(Self.page(values: [Self.observation(id: 1)], page: 1, total: 1)),
+                .success(Self.page(values: [Self.observation(id: 2)], page: 1, total: 1))
+            ],
+            delays: [120_000_000, 0],
+            ignoresCancellationDuringDelay: true
+        )
+        let viewModel = ExploreViewModel(observationsRepository: repository, perPage: 2)
+
+        let oldTask = viewModel.setTaxonFilter(oldTaxon)
+        let newTask = viewModel.setTaxonFilter(newTaxon)
+
+        await newTask?.value
+        await oldTask?.value
+
+        #expect(viewModel.filters.taxon == newTaxon)
+        #expect(viewModel.loadedItems.map(\.id) == [2])
+        #expect(repository.calls.map(\.filters.taxon?.id) == [104, 105])
+    }
+
     private static func page(
         values: [Observation],
         page: Int,
@@ -264,6 +372,20 @@ struct ExploreViewModelTests {
         PaginatedPage(values: values, page: page, perPage: perPage, totalResults: total)
     }
 
+    private static func taxon(id: Int, commonName: String? = nil) -> Taxon {
+        Taxon(
+            id: id,
+            scientificName: "Species \(id)",
+            commonName: commonName,
+            rank: "species",
+            iconicTaxonName: nil,
+            matchedTerm: nil,
+            wikipediaURL: nil,
+            wikipediaSummary: nil,
+            defaultPhoto: nil
+        )
+    }
+
     private static func observation(id: Int) -> Observation {
         Observation(
             id: id,
@@ -271,17 +393,7 @@ struct ExploreViewModelTests {
             quality: .research,
             observedOn: "2026-09-07",
             observedAt: nil,
-            taxon: Taxon(
-                id: id,
-                scientificName: "Species \(id)",
-                commonName: "Common \(id)",
-                rank: "species",
-                iconicTaxonName: nil,
-                matchedTerm: nil,
-                wikipediaURL: nil,
-                wikipediaSummary: nil,
-                defaultPhoto: nil
-            ),
+            taxon: Self.taxon(id: id, commonName: "Common \(id)"),
             photos: [
                 ObservationPhoto(
                     id: id,
@@ -308,14 +420,22 @@ private nonisolated final class MockObservationsRepository: ObservationsReposito
 
     private let lock = NSLock()
     private var results: [Result<PaginatedPage<Observation>, Error>]
+    private var delays: [UInt64]
+    private let ignoresCancellationDuringDelay: Bool
     private var recordedCalls: [Call] = []
 
     var calls: [Call] {
         withLock { recordedCalls }
     }
 
-    init(results: [Result<PaginatedPage<Observation>, Error>] = []) {
+    init(
+        results: [Result<PaginatedPage<Observation>, Error>] = [],
+        delays: [UInt64] = [],
+        ignoresCancellationDuringDelay: Bool = false
+    ) {
         self.results = results
+        self.delays = delays
+        self.ignoresCancellationDuringDelay = ignoresCancellationDuringDelay
     }
 
     func observations(
@@ -323,15 +443,26 @@ private nonisolated final class MockObservationsRepository: ObservationsReposito
         perPage: Int,
         filters: ObservationFilters
     ) async throws -> PaginatedPage<Observation> {
-        let result: Result<PaginatedPage<Observation>, Error> = withLock {
+        let response: (result: Result<PaginatedPage<Observation>, Error>, delay: UInt64?) = withLock {
             recordedCalls.append(Call(page: page, perPage: perPage, filters: filters))
-            return results.isEmpty
+            let result = results.isEmpty
                 ? .success(PaginatedPage(values: [], page: page, perPage: perPage, totalResults: 0))
                 : results.removeFirst()
+            let delay = delays.isEmpty ? nil : delays.removeFirst()
+            return (result, delay)
         }
 
-        await Task.yield()
-        return try result.get()
+        if let delay = response.delay {
+            if ignoresCancellationDuringDelay {
+                try? await Task.sleep(nanoseconds: delay)
+            } else {
+                try await Task.sleep(nanoseconds: delay)
+            }
+        } else {
+            await Task.yield()
+        }
+
+        return try response.result.get()
     }
 
     func observation(id: Int) async throws -> Observation {
