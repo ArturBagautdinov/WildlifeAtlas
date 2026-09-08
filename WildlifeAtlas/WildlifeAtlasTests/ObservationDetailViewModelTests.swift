@@ -109,7 +109,7 @@ struct ObservationDetailViewModelTests {
             )
         )
 
-        #expect(content.imageURL == nil)
+        #expect(content.photos.isEmpty)
         #expect(content.commonName == nil)
         #expect(content.scientificName == nil)
         #expect(content.qualityText == nil)
@@ -191,7 +191,100 @@ struct ObservationDetailViewModelTests {
         #expect(content.accessibilityLabel.contains("37.618423") == false)
     }
 
-    private static func observation(id: Int, taxonSummary: String? = "A widespread fox species.") -> Observation {
+    @Test func galleryUsesAllPhotosWithUsableURLs() {
+        let content = ObservationDetailContent(
+            observation: Self.observation(
+                id: 15,
+                photos: [
+                    ObservationPhoto(
+                        id: 1,
+                        squareURL: URL(string: "https://example.com/one-square.jpg"),
+                        mediumURL: URL(string: "https://example.com/one-medium.jpg"),
+                        attribution: "(c) One",
+                        licenseCode: "cc-by"
+                    ),
+                    ObservationPhoto(
+                        id: 2,
+                        squareURL: URL(string: "https://example.com/two-square.jpg"),
+                        mediumURL: nil,
+                        attribution: "(c) Two",
+                        licenseCode: "cc0"
+                    )
+                ]
+            )
+        )
+
+        #expect(content.photos.map(\.id) == [1, 2])
+        #expect(content.photos.map(\.imageURL.absoluteString) == [
+            "https://example.com/one-medium.jpg",
+            "https://example.com/two-square.jpg"
+        ])
+    }
+
+    @Test func galleryOmitsPhotosWithoutDisplayableURLs() {
+        let content = ObservationDetailContent(
+            observation: Self.observation(
+                id: 16,
+                photos: [
+                    ObservationPhoto(
+                        id: 1,
+                        squareURL: nil,
+                        mediumURL: nil,
+                        attribution: "(c) One",
+                        licenseCode: "cc-by"
+                    ),
+                    ObservationPhoto(
+                        id: 2,
+                        squareURL: URL(string: "https://example.com/two-square.jpg"),
+                        mediumURL: nil,
+                        attribution: "(c) Two",
+                        licenseCode: "cc0"
+                    )
+                ]
+            )
+        )
+
+        #expect(content.photos.map(\.id) == [2])
+    }
+
+    @Test func sharePayloadUsesSafePublicObservationInformation() {
+        let content = ObservationDetailContent(observation: Self.observation(id: 17))
+
+        #expect(content.canShare)
+        #expect(content.shareText?.contains("Red Fox") == true)
+        #expect(content.shareText?.contains("Vulpes vulpes") == true)
+        #expect(content.shareText?.contains("Observed on 14 May 2024 at 06:42") == true)
+        #expect(content.shareURL == URL(string: "https://www.inaturalist.org/observations/17"))
+        #expect(content.shareText?.contains("Samish TDSA") == false)
+        #expect(content.shareText?.contains("55.") == false)
+        #expect(content.shareText?.contains("37.") == false)
+    }
+
+    @Test func shareIsUnavailableWhenNoSafeShareDataExists() {
+        let content = ObservationDetailContent(
+            observation: Observation(
+                id: 18,
+                uri: nil,
+                quality: nil,
+                observedOn: nil,
+                observedAt: nil,
+                taxon: nil,
+                photos: [],
+                author: nil,
+                location: ObservationLocationSummary(placeName: "Private location")
+            )
+        )
+
+        #expect(content.canShare == false)
+        #expect(content.shareText == nil)
+        #expect(content.shareURL == nil)
+    }
+
+    private static func observation(
+        id: Int,
+        taxonSummary: String? = "A widespread fox species.",
+        photos: [ObservationPhoto]? = nil
+    ) -> Observation {
         Observation(
             id: id,
             uri: URL(string: "https://www.inaturalist.org/observations/\(id)"),
@@ -209,7 +302,7 @@ struct ObservationDetailViewModelTests {
                 wikipediaSummary: taxonSummary,
                 defaultPhoto: nil
             ),
-            photos: [
+            photos: photos ?? [
                 ObservationPhoto(
                     id: 1,
                     squareURL: URL(string: "https://example.com/square.jpg"),

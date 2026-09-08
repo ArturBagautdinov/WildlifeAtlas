@@ -8,39 +8,50 @@
 import Foundation
 
 nonisolated struct ObservationDetailContent: Equatable {
-    struct InfoRow: Equatable, Identifiable {
-        let id: String
-        let title: String
-        let value: String
-    }
-
     let id: Int
-    let imageURL: URL?
+    let photos: [ObservationDetailPhotoItem]
     let commonName: String?
     let scientificName: String?
     let qualityText: String?
     let qualitySymbol: String?
     let observedDate: String?
-    let taxonRows: [InfoRow]
+    let taxonRows: [ObservationDetailInfoRow]
     let locationName: String?
     let authorName: String?
     let photoAttribution: String?
     let photoLicense: String?
+    let shareText: String?
+    let shareURL: URL?
 
     init(observation: Observation) {
         let primaryPhoto = observation.photos.first
+        let commonName = Self.visibleText(observation.taxon?.commonName)
+        let scientificName = Self.visibleText(observation.taxon?.scientificName)
+        let observedDate = Self.formattedObservedDate(observedOn: observation.observedOn, observedAt: observation.observedAt)
+
         self.id = observation.id
-        self.imageURL = primaryPhoto?.mediumURL ?? primaryPhoto?.squareURL
-        self.commonName = Self.visibleText(observation.taxon?.commonName)
-        self.scientificName = Self.visibleText(observation.taxon?.scientificName)
+        self.commonName = commonName
+        self.scientificName = scientificName
+        self.photos = Self.photoItems(from: observation.photos, commonName: commonName)
         self.qualityText = observation.quality?.detailDisplayText
         self.qualitySymbol = observation.quality?.detailDisplaySymbol
-        self.observedDate = Self.formattedObservedDate(observedOn: observation.observedOn, observedAt: observation.observedAt)
+        self.observedDate = observedDate
         self.taxonRows = Self.taxonRows(from: observation.taxon)
         self.locationName = Self.visibleText(observation.location?.placeName)
         self.authorName = Self.authorName(from: observation.author)
         self.photoAttribution = Self.visibleText(primaryPhoto?.attribution)
         self.photoLicense = Self.formattedLicense(primaryPhoto?.licenseCode)
+        self.shareURL = observation.uri
+        self.shareText = Self.shareText(
+            commonName: commonName,
+            scientificName: scientificName,
+            observedDate: observedDate,
+            url: observation.uri
+        )
+    }
+
+    var canShare: Bool {
+        shareText != nil || shareURL != nil
     }
 
     var accessibilityLabel: String {
@@ -56,19 +67,35 @@ nonisolated struct ObservationDetailContent: Equatable {
         .joined(separator: ", ")
     }
 
-    private static func taxonRows(from taxon: Taxon?) -> [InfoRow] {
+    private static func photoItems(from photos: [ObservationPhoto], commonName: String?) -> [ObservationDetailPhotoItem] {
+        photos.compactMap { photo in
+            guard let imageURL = photo.mediumURL ?? photo.squareURL else { return nil }
+            return ObservationDetailPhotoItem(
+                id: photo.id,
+                imageURL: imageURL,
+                accessibilityLabel: commonName.map { "Observation photo of \($0)" } ?? "Observation photo"
+            )
+        }
+    }
+
+    private static func taxonRows(from taxon: Taxon?) -> [ObservationDetailInfoRow] {
         guard let taxon else { return [] }
 
-        var rows: [InfoRow] = []
+        var rows: [ObservationDetailInfoRow] = []
         appendRow(id: "rank", title: "Rank", value: taxon.rank, to: &rows)
         appendRow(id: "group", title: "Group", value: taxon.iconicTaxonName, to: &rows)
         appendRow(id: "summary", title: "About", value: plainText(fromHTML: taxon.wikipediaSummary), to: &rows)
         return rows
     }
 
-    private static func appendRow(id: String, title: String, value: String?, to rows: inout [InfoRow]) {
+    private static func appendRow(
+        id: String,
+        title: String,
+        value: String?,
+        to rows: inout [ObservationDetailInfoRow]
+    ) {
         guard let value = visibleText(value) else { return }
-        rows.append(InfoRow(id: id, title: title, value: value))
+        rows.append(ObservationDetailInfoRow(id: id, title: title, value: value))
     }
 
     private static func authorName(from author: ObservationAuthor?) -> String? {
@@ -81,6 +108,28 @@ nonisolated struct ObservationDetailContent: Equatable {
         return licenseCode
             .replacingOccurrences(of: "-", with: " ")
             .uppercased()
+    }
+
+    private static func shareText(commonName: String?, scientificName: String?, observedDate: String?, url: URL?) -> String? {
+        let title = [
+            commonName,
+            scientificName
+        ]
+        .compactMap(visibleText)
+        .joined(separator: " - ")
+
+        var parts: [String] = []
+        if let title = visibleText(title) {
+            parts.append(title)
+        }
+        if let observedDate = visibleText(observedDate) {
+            parts.append("Observed on \(observedDate)")
+        }
+        if url == nil, parts.isEmpty {
+            return nil
+        }
+
+        return parts.isEmpty ? nil : parts.joined(separator: "\n")
     }
 
     private static func formattedObservedDate(observedOn: String?, observedAt: String?) -> String? {

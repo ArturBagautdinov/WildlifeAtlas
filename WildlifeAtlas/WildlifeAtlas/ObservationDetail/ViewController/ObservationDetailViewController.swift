@@ -19,17 +19,7 @@ final class ObservationDetailViewController: UIViewController {
         return stackView
     }()
 
-    private let heroImageView: RemoteImageView = {
-        let imageView = RemoteImageView(frame: .zero)
-        imageView.setLoadedContentMode(.scaleAspectFill)
-        imageView.layer.cornerRadius = 14
-        imageView.clipsToBounds = true
-        imageView.backgroundColor = .tertiarySystemFill
-        imageView.placeholderImage = UIImage(systemName: "photo")
-        imageView.placeholderContentMode = .center
-        imageView.tintColor = .secondaryLabel
-        return imageView
-    }()
+    private let photoGalleryView = ObservationPhotoGalleryView()
 
     private let commonNameLabel = ObservationDetailTextLabel(
         font: .preferredFont(forTextStyle: .largeTitle),
@@ -46,6 +36,7 @@ final class ObservationDetailViewController: UIViewController {
     private let qualityBadgeView = ObservationDetailQualityBadgeView()
     private let taxonInfoView = ObservationDetailTaxonInfoView()
     private let stateView = ObservationDetailStateView()
+    private var currentContent: ObservationDetailContent?
     private var heroImageHeightConstraint: NSLayoutConstraint?
     private var qualityBadgeWidthConstraint: NSLayoutConstraint?
 
@@ -69,15 +60,19 @@ final class ObservationDetailViewController: UIViewController {
         viewModel.loadObservation()
     }
 
-    deinit {
-        heroImageView.cancelImageLoad()
-    }
-
     private func configureView() {
         title = "Observation"
         view.backgroundColor = UIColor(red: 0.98, green: 0.96, blue: 0.92, alpha: 1.0)
         navigationController?.navigationBar.tintColor = .wildlifePrimaryText
         navigationController?.navigationBar.prefersLargeTitles = false
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .action,
+            target: self,
+            action: #selector(shareTapped)
+        )
+        navigationItem.rightBarButtonItem?.tintColor = .wildlifePrimaryText
+        navigationItem.rightBarButtonItem?.accessibilityLabel = "Share observation"
+        navigationItem.rightBarButtonItem?.isHidden = true
     }
 
     private func configureHierarchy() {
@@ -120,13 +115,19 @@ final class ObservationDetailViewController: UIViewController {
     private func render(state: ObservationDetailViewModel.State) {
         switch state {
         case .loading:
+            currentContent = nil
+            navigationItem.rightBarButtonItem?.isHidden = true
             scrollView.isHidden = true
             stateView.configureLoading()
         case .content(let content):
+            currentContent = content
+            navigationItem.rightBarButtonItem?.isHidden = content.canShare == false
             stateView.isHidden = true
             scrollView.isHidden = false
             render(content: content)
         case .notFound:
+            currentContent = nil
+            navigationItem.rightBarButtonItem?.isHidden = true
             scrollView.isHidden = true
             stateView.configureMessage(
                 title: "Observation not found",
@@ -134,6 +135,8 @@ final class ObservationDetailViewController: UIViewController {
                 showsRetry: false
             )
         case .error(let error):
+            currentContent = nil
+            navigationItem.rightBarButtonItem?.isHidden = true
             scrollView.isHidden = true
             stateView.configureMessage(title: error.title, message: error.message, showsRetry: true)
         }
@@ -145,16 +148,15 @@ final class ObservationDetailViewController: UIViewController {
             view.removeFromSuperview()
         }
 
-        if content.imageURL != nil {
-            contentStackView.addArrangedSubview(heroImageView)
-            heroImageView.loadImage(from: content.imageURL, imageLoader: imageLoader)
+        if content.photos.isEmpty == false {
+            contentStackView.addArrangedSubview(photoGalleryView)
+            photoGalleryView.configure(photos: content.photos, imageLoader: imageLoader)
             if heroImageHeightConstraint == nil {
-                heroImageHeightConstraint = heroImageView.heightAnchor.constraint(equalTo: heroImageView.widthAnchor, multiplier: 0.76)
+                heroImageHeightConstraint = photoGalleryView.heightAnchor.constraint(equalTo: photoGalleryView.widthAnchor, multiplier: 0.76)
                 heroImageHeightConstraint?.isActive = true
             }
-            heroImageView.accessibilityLabel = content.commonName.map { "Observation photo of \($0)" } ?? "Observation photo"
         } else {
-            heroImageView.cancelImageLoad()
+            photoGalleryView.configure(photos: [], imageLoader: imageLoader)
         }
 
         if let identityView = makeIdentityView(content: content) {
@@ -223,5 +225,23 @@ final class ObservationDetailViewController: UIViewController {
         contentStackView.addArrangedSubview(
             ObservationDetailInfoRowView(systemImageName: systemImageName, title: title, value: value)
         )
+    }
+
+    @objc private func shareTapped() {
+        guard let content = currentContent else { return }
+
+        var items: [Any] = []
+        if let shareText = content.shareText {
+            items.append(shareText)
+        }
+        if let shareURL = content.shareURL {
+            items.append(shareURL)
+        }
+
+        guard items.isEmpty == false else { return }
+
+        let activityViewController = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        activityViewController.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
+        present(activityViewController, animated: true)
     }
 }
