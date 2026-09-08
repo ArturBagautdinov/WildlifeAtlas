@@ -84,6 +84,48 @@ struct ObservationDetailViewModelTests {
         #expect(content.id == 10)
     }
 
+    @Test func loadedContentExposesFavoriteState() async {
+        let repository = MockDetailObservationsRepository(results: [.success(Self.observation(id: 19))])
+        let favoritesStore = MockDetailFavoritesStore(ids: [19])
+        let viewModel = ObservationDetailViewModel(
+            observationID: 19,
+            observationsRepository: repository,
+            favoritesStore: favoritesStore
+        )
+
+        await viewModel.loadObservation().value
+
+        guard case .content(let content) = viewModel.state else {
+            Issue.record("Expected content state")
+            return
+        }
+
+        #expect(content.isFavorite)
+    }
+
+    @Test func togglingFavoriteUpdatesStoreAndContentWithoutRefetching() async {
+        let repository = MockDetailObservationsRepository(results: [.success(Self.observation(id: 20))])
+        let favoritesStore = MockDetailFavoritesStore()
+        let viewModel = ObservationDetailViewModel(
+            observationID: 20,
+            observationsRepository: repository,
+            favoritesStore: favoritesStore
+        )
+
+        await viewModel.loadObservation().value
+        viewModel.toggleFavorite()
+
+        #expect(favoritesStore.loadFavoriteIDs() == [20])
+        #expect(repository.requestedObservationIDs == [20])
+
+        guard case .content(let content) = viewModel.state else {
+            Issue.record("Expected content state")
+            return
+        }
+
+        #expect(content.isFavorite)
+    }
+
     @Test func missingOptionalFieldsRemainAbsentInContent() {
         let content = ObservationDetailContent(
             observation: Observation(
@@ -324,6 +366,42 @@ struct ObservationDetailViewModelTests {
 
 private nonisolated struct TestError: Error {}
 
+private nonisolated final class MockDetailFavoritesStore: FavoritesStore {
+    private let lock = NSLock()
+    private var ids: [Int]
+
+    init(ids: [Int] = []) {
+        self.ids = ids
+    }
+
+    func loadFavoriteIDs() -> [Int] {
+        withLock { ids }
+    }
+
+    func isFavorite(id: Int) -> Bool {
+        loadFavoriteIDs().contains(id)
+    }
+
+    func addFavorite(id: Int) {
+        withLock {
+            ids.removeAll { $0 == id }
+            ids.insert(id, at: 0)
+        }
+    }
+
+    func removeFavorite(id: Int) {
+        withLock {
+            ids.removeAll { $0 == id }
+        }
+    }
+
+    private func withLock<Value>(_ work: () throws -> Value) rethrows -> Value {
+        lock.lock()
+        defer { lock.unlock() }
+        return try work()
+    }
+}
+
 private nonisolated final class MockDetailObservationsRepository: ObservationsRepository {
     private let lock = NSLock()
     private var results: [Result<Observation, Error>]
@@ -339,6 +417,10 @@ private nonisolated final class MockDetailObservationsRepository: ObservationsRe
 
     func observations(page: Int, perPage: Int, filters: ObservationFilters) async throws -> PaginatedPage<Observation> {
         PaginatedPage(values: [], page: page, perPage: perPage, totalResults: 0)
+    }
+
+    func observations(ids: [Int]) async throws -> [Observation] {
+        []
     }
 
     func observation(id: Int) async throws -> Observation {

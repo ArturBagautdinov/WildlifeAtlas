@@ -36,6 +36,17 @@ final class ObservationDetailViewController: UIViewController {
     private let qualityBadgeView = ObservationDetailQualityBadgeView()
     private let taxonInfoView = ObservationDetailTaxonInfoView()
     private let stateView = ObservationDetailStateView()
+    private lazy var favoriteButton = UIBarButtonItem(
+        image: UIImage(systemName: "heart"),
+        style: .plain,
+        target: self,
+        action: #selector(favoriteTapped)
+    )
+    private lazy var shareButton = UIBarButtonItem(
+        barButtonSystemItem: .action,
+        target: self,
+        action: #selector(shareTapped)
+    )
     private var currentContent: ObservationDetailContent?
     private var heroImageHeightConstraint: NSLayoutConstraint?
     private var qualityBadgeWidthConstraint: NSLayoutConstraint?
@@ -65,14 +76,12 @@ final class ObservationDetailViewController: UIViewController {
         view.backgroundColor = UIColor(red: 0.98, green: 0.96, blue: 0.92, alpha: 1.0)
         navigationController?.navigationBar.tintColor = .wildlifePrimaryText
         navigationController?.navigationBar.prefersLargeTitles = false
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .action,
-            target: self,
-            action: #selector(shareTapped)
-        )
-        navigationItem.rightBarButtonItem?.tintColor = .wildlifePrimaryText
-        navigationItem.rightBarButtonItem?.accessibilityLabel = "Share observation"
-        navigationItem.rightBarButtonItem?.isHidden = true
+        favoriteButton.tintColor = .wildlifePrimaryText
+        favoriteButton.accessibilityLabel = "Favorite observation"
+        shareButton.tintColor = .wildlifePrimaryText
+        shareButton.accessibilityLabel = "Share observation"
+        navigationItem.rightBarButtonItems = [shareButton, favoriteButton]
+        setActionsHidden(true)
     }
 
     private func configureHierarchy() {
@@ -116,18 +125,22 @@ final class ObservationDetailViewController: UIViewController {
         switch state {
         case .loading:
             currentContent = nil
-            navigationItem.rightBarButtonItem?.isHidden = true
+            setActionsHidden(true)
             scrollView.isHidden = true
             stateView.configureLoading()
         case .content(let content):
             currentContent = content
-            navigationItem.rightBarButtonItem?.isHidden = content.canShare == false
+            setActionsHidden(false)
+            shareButton.isHidden = content.canShare == false
+            favoriteButton.image = UIImage(systemName: content.isFavorite ? "heart.fill" : "heart")
+            favoriteButton.tintColor = content.isFavorite ? .systemRed : .wildlifePrimaryText
+            favoriteButton.accessibilityValue = content.isFavorite ? "Favorite" : "Not favorite"
             stateView.isHidden = true
             scrollView.isHidden = false
             render(content: content)
         case .notFound:
             currentContent = nil
-            navigationItem.rightBarButtonItem?.isHidden = true
+            setActionsHidden(true)
             scrollView.isHidden = true
             stateView.configureMessage(
                 title: "Observation not found",
@@ -136,7 +149,7 @@ final class ObservationDetailViewController: UIViewController {
             )
         case .error(let error):
             currentContent = nil
-            navigationItem.rightBarButtonItem?.isHidden = true
+            setActionsHidden(true)
             scrollView.isHidden = true
             stateView.configureMessage(title: error.title, message: error.message, showsRetry: true)
         }
@@ -241,7 +254,16 @@ final class ObservationDetailViewController: UIViewController {
         guard items.isEmpty == false else { return }
 
         let activityViewController = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        activityViewController.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
+        activityViewController.popoverPresentationController?.barButtonItem = shareButton
         present(activityViewController, animated: true)
+    }
+
+    @objc private func favoriteTapped() {
+        viewModel.toggleFavorite()
+    }
+
+    private func setActionsHidden(_ isHidden: Bool) {
+        shareButton.isHidden = isHidden
+        favoriteButton.isHidden = isHidden
     }
 }

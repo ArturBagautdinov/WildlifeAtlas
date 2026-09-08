@@ -18,6 +18,8 @@ final class ObservationDetailViewModel {
 
     private let observationID: Int
     private let observationsRepository: ObservationsRepository
+    private let favoritesStore: FavoritesStore
+    private var observation: Observation?
     private var loadTask: Task<Void, Never>?
 
     private(set) var state: State = .loading {
@@ -26,9 +28,14 @@ final class ObservationDetailViewModel {
 
     var onStateChange: ((State) -> Void)?
 
-    init(observationID: Int, observationsRepository: ObservationsRepository) {
+    init(
+        observationID: Int,
+        observationsRepository: ObservationsRepository,
+        favoritesStore: FavoritesStore = EmptyObservationDetailFavoritesStore()
+    ) {
         self.observationID = observationID
         self.observationsRepository = observationsRepository
+        self.favoritesStore = favoritesStore
     }
 
     @discardableResult
@@ -43,7 +50,8 @@ final class ObservationDetailViewModel {
             do {
                 let observation = try await observationsRepository.observation(id: observationID)
                 guard !Task.isCancelled else { return }
-                state = .content(ObservationDetailContent(observation: observation))
+                self.observation = observation
+                state = .content(makeContent(from: observation))
             } catch RepositoryError.notFound {
                 guard !Task.isCancelled else { return }
                 state = .notFound
@@ -61,6 +69,31 @@ final class ObservationDetailViewModel {
     func retry() -> Task<Void, Never> {
         loadObservation()
     }
+
+    func toggleFavorite() {
+        if favoritesStore.isFavorite(id: observationID) {
+            favoritesStore.removeFavorite(id: observationID)
+        } else {
+            favoritesStore.addFavorite(id: observationID)
+        }
+
+        guard let observation else { return }
+        state = .content(makeContent(from: observation))
+    }
+
+    private func makeContent(from observation: Observation) -> ObservationDetailContent {
+        ObservationDetailContent(
+            observation: observation,
+            isFavorite: favoritesStore.isFavorite(id: observation.id)
+        )
+    }
+}
+
+private nonisolated final class EmptyObservationDetailFavoritesStore: FavoritesStore {
+    func loadFavoriteIDs() -> [Int] { [] }
+    func isFavorite(id: Int) -> Bool { false }
+    func addFavorite(id: Int) {}
+    func removeFavorite(id: Int) {}
 }
 
 nonisolated struct ObservationDetailErrorViewModel: Equatable {

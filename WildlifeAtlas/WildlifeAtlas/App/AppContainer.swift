@@ -11,11 +11,13 @@ final class AppContainer {
     private let apiClient: APIClient
     private let imageLoader: ImageLoader
     private let recentTaxaStore: RecentTaxaStore
+    private let favoritesStore: FavoritesStore
 
     init() {
         self.apiClient = APIClient(baseURL: INaturalistEndpoint.baseURL)
         self.imageLoader = RemoteImageLoader()
         self.recentTaxaStore = UserDefaultsRecentTaxaStore()
+        self.favoritesStore = UserDefaultsFavoritesStore()
     }
 
     func makeAppCoordinator(window: UIWindow) -> AppCoordinator {
@@ -23,7 +25,10 @@ final class AppContainer {
     }
 
     func makeExploreViewController() -> ExploreViewController {
-        let viewModel = ExploreViewModel(observationsRepository: makeObservationsRepository())
+        let viewModel = ExploreViewModel(
+            observationsRepository: makeObservationsRepository(),
+            favoritesStore: favoritesStore
+        )
         let taxonSearchViewModel = TaxonSearchViewModel(
             taxaRepository: makeTaxaRepository(),
             recentTaxaStore: recentTaxaStore
@@ -35,10 +40,19 @@ final class AppContainer {
         )
     }
 
+    func makeFavoritesViewController() -> FavoritesViewController {
+        let viewModel = FavoritesViewModel(
+            observationsRepository: makeObservationsRepository(),
+            favoritesStore: favoritesStore
+        )
+        return FavoritesViewController(viewModel: viewModel, imageLoader: imageLoader)
+    }
+
     func makeObservationDetailViewController(observationID: Int) -> ObservationDetailViewController {
         let viewModel = ObservationDetailViewModel(
             observationID: observationID,
-            observationsRepository: makeObservationsRepository()
+            observationsRepository: makeObservationsRepository(),
+            favoritesStore: favoritesStore
         )
         return ObservationDetailViewController(viewModel: viewModel, imageLoader: imageLoader)
     }

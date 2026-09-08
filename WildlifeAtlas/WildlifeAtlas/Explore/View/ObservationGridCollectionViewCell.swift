@@ -17,6 +17,8 @@ final class ObservationGridCollectionViewCell: UICollectionViewCell {
     private let scientificNameLabel = ObservationTextLabel(font: .italicSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .caption1).pointSize), color: .secondaryLabel, lines: 1)
     private let dateRow = ObservationMetadataRow(systemImageName: "calendar")
     private let qualityBadgeView = ObservationQualityBadgeView()
+    private let favoriteButton = ObservationFavoriteButton()
+    private var onFavoriteTapped: (() -> Void)?
     private lazy var infoStackView: UIStackView = {
         let stackView = UIStackView(arrangedSubviews: [
             commonNameLabel,
@@ -43,13 +45,16 @@ final class ObservationGridCollectionViewCell: UICollectionViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         previewImageView.cancelImageLoad()
+        onFavoriteTapped = nil
     }
 
-    func configure(with item: ExploreObservationItem, imageLoader: ImageLoader) {
+    func configure(with item: ExploreObservationItem, imageLoader: ImageLoader, onFavoriteTapped: @escaping () -> Void) {
         commonNameLabel.setVisibleText(item.commonName)
         scientificNameLabel.setVisibleText(item.scientificName)
         dateRow.setText(item.observedDate)
         qualityBadgeView.configure(symbol: item.qualitySymbol, text: item.qualityText)
+        favoriteButton.setFavorite(item.isFavorite)
+        self.onFavoriteTapped = onFavoriteTapped
 
         isAccessibilityElement = true
         accessibilityLabel = item.accessibilityLabel
@@ -70,7 +75,8 @@ final class ObservationGridCollectionViewCell: UICollectionViewCell {
         [
             previewImageView,
             infoStackView,
-            qualityBadgeView
+            qualityBadgeView,
+            favoriteButton
         ].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             cardView.addSubview($0)
@@ -87,6 +93,11 @@ final class ObservationGridCollectionViewCell: UICollectionViewCell {
             previewImageView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
             previewImageView.heightAnchor.constraint(equalTo: previewImageView.widthAnchor, multiplier: 0.82),
 
+            favoriteButton.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 8),
+            favoriteButton.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -8),
+            favoriteButton.widthAnchor.constraint(equalToConstant: 32),
+            favoriteButton.heightAnchor.constraint(equalToConstant: 32),
+
             infoStackView.topAnchor.constraint(equalTo: previewImageView.bottomAnchor, constant: 10),
             infoStackView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 10),
             infoStackView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -10),
@@ -97,5 +108,11 @@ final class ObservationGridCollectionViewCell: UICollectionViewCell {
             qualityBadgeView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -10),
             qualityBadgeView.heightAnchor.constraint(equalToConstant: Self.qualityBadgeHeight)
         ])
+
+        favoriteButton.addTarget(self, action: #selector(favoriteTapped), for: .touchUpInside)
+    }
+
+    @objc private func favoriteTapped() {
+        onFavoriteTapped?()
     }
 }

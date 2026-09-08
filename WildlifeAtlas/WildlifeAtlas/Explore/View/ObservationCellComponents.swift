@@ -175,6 +175,33 @@ final class ObservationQualityBadgeView: UIView {
     }
 }
 
+final class ObservationFavoriteButton: UIButton {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        configure()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("Use init(frame:) instead.")
+    }
+
+    func setFavorite(_ isFavorite: Bool) {
+        let imageName = isFavorite ? "heart.fill" : "heart"
+        setImage(UIImage(systemName: imageName), for: .normal)
+        tintColor = isFavorite ? .systemRed : .wildlifeAccent
+        accessibilityValue = isFavorite ? "Favorite" : "Not favorite"
+    }
+
+    private func configure() {
+        backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.92)
+        layer.cornerRadius = 16
+        clipsToBounds = true
+        accessibilityLabel = "Favorite observation"
+        accessibilityTraits = .button
+    }
+}
+
 extension UILabel {
     func setVisibleText(_ text: String?) {
         self.text = text

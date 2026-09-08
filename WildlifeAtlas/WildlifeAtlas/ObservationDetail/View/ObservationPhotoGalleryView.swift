@@ -41,6 +41,14 @@ final class ObservationPhotoGalleryView: UIView {
         return pageControl
     }()
 
+    private let pageControlBackgroundView: UIVisualEffectView = {
+        let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialLight))
+        view.layer.cornerRadius = 14
+        view.clipsToBounds = true
+        view.isHidden = true
+        return view
+    }()
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         configureHierarchy()
@@ -68,6 +76,7 @@ final class ObservationPhotoGalleryView: UIView {
         pageControl.numberOfPages = photos.count
         pageControl.currentPage = 0
         pageControl.isHidden = photos.count <= 1
+        pageControlBackgroundView.isHidden = photos.count <= 1
         collectionView.setContentOffset(.zero, animated: false)
         collectionView.reloadData()
         accessibilityLabel = photos.count > 1 ? "Observation photo gallery" : photos.first?.accessibilityLabel
@@ -79,10 +88,12 @@ final class ObservationPhotoGalleryView: UIView {
         isAccessibilityElement = false
 
         collectionView.translatesAutoresizingMaskIntoConstraints = false
+        pageControlBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         pageControl.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(collectionView)
-        addSubview(pageControl)
+        addSubview(pageControlBackgroundView)
+        pageControlBackgroundView.contentView.addSubview(pageControl)
 
         NSLayoutConstraint.activate([
             collectionView.topAnchor.constraint(equalTo: topAnchor),
@@ -90,10 +101,15 @@ final class ObservationPhotoGalleryView: UIView {
             collectionView.trailingAnchor.constraint(equalTo: trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            pageControl.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 16),
-            pageControl.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16),
-            pageControl.centerXAnchor.constraint(equalTo: centerXAnchor),
-            pageControl.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
+            pageControlBackgroundView.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 16),
+            pageControlBackgroundView.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16),
+            pageControlBackgroundView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            pageControlBackgroundView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
+
+            pageControl.topAnchor.constraint(equalTo: pageControlBackgroundView.contentView.topAnchor, constant: 2),
+            pageControl.leadingAnchor.constraint(equalTo: pageControlBackgroundView.contentView.leadingAnchor, constant: 8),
+            pageControl.trailingAnchor.constraint(equalTo: pageControlBackgroundView.contentView.trailingAnchor, constant: -8),
+            pageControl.bottomAnchor.constraint(equalTo: pageControlBackgroundView.contentView.bottomAnchor, constant: -2)
         ])
     }
 }

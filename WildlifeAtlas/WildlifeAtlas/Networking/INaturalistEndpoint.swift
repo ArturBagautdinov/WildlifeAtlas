@@ -34,6 +34,16 @@ nonisolated enum INaturalistEndpoint {
         APIEndpoint(path: "observations/\(id)")
     }
 
+    static func observations(ids: [Int]) -> APIEndpoint {
+        APIEndpoint(
+            path: "observations",
+            queryItems: [
+                URLQueryItem(name: "id", value: ids.map(String.init).joined(separator: ",")),
+                URLQueryItem(name: "captive", value: "false")
+            ]
+        )
+    }
+
     static func taxaAutocomplete(query: String, page: Int, perPage: Int) -> APIEndpoint {
         APIEndpoint(
             path: "taxa/autocomplete",

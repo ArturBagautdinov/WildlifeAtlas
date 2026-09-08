@@ -22,8 +22,9 @@ nonisolated struct ObservationDetailContent: Equatable {
     let photoLicense: String?
     let shareText: String?
     let shareURL: URL?
+    let isFavorite: Bool
 
-    init(observation: Observation) {
+    init(observation: Observation, isFavorite: Bool = false) {
         let primaryPhoto = observation.photos.first
         let commonName = Self.visibleText(observation.taxon?.commonName)
         let scientificName = Self.visibleText(observation.taxon?.scientificName)
@@ -48,6 +49,7 @@ nonisolated struct ObservationDetailContent: Equatable {
             observedDate: observedDate,
             url: observation.uri
         )
+        self.isFavorite = isFavorite
     }
 
     var canShare: Bool {

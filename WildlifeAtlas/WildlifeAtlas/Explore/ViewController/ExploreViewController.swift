@@ -68,6 +68,17 @@ final class ExploreViewController: UIViewController {
         viewModel.loadInitialObservations()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(true, animated: animated)
+        viewModel.refreshFavoriteState()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        navigationController?.setNavigationBarHidden(false, animated: animated)
+    }
+
     private func configureView() {
         view.backgroundColor = UIColor(red: 0.98, green: 0.96, blue: 0.92, alpha: 1.0)
         navigationItem.title = ""
@@ -85,11 +96,11 @@ final class ExploreViewController: UIViewController {
         view.addSubview(taxonSearchPanelView)
 
         NSLayoutConstraint.activate([
-            headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
             headerView.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
             headerView.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
 
-            collectionView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 18),
+            collectionView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 12),
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -141,14 +152,18 @@ final class ExploreViewController: UIViewController {
                     withReuseIdentifier: ObservationListCollectionViewCell.reuseIdentifier,
                     for: indexPath
                 ) as? ObservationListCollectionViewCell
-                cell?.configure(with: item, imageLoader: imageLoader)
+                cell?.configure(with: item, imageLoader: imageLoader) { [weak self] in
+                    self?.viewModel.toggleFavorite(id: item.id)
+                }
                 return cell
             case .grid:
                 let cell = collectionView.dequeueReusableCell(
                     withReuseIdentifier: ObservationGridCollectionViewCell.reuseIdentifier,
                     for: indexPath
                 ) as? ObservationGridCollectionViewCell
-                cell?.configure(with: item, imageLoader: imageLoader)
+                cell?.configure(with: item, imageLoader: imageLoader) { [weak self] in
+                    self?.viewModel.toggleFavorite(id: item.id)
+                }
                 return cell
             }
         }
