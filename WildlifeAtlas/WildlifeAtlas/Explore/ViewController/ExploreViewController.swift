@@ -13,71 +13,41 @@ private nonisolated enum ExploreSection {
 
 final class ExploreViewController: UIViewController {
     private let viewModel: ExploreViewModel
+    private let taxonSearchViewModel: TaxonSearchViewModel
     private let imageLoader: ImageLoader
     private var dataSource: UICollectionViewDiffableDataSource<ExploreSection, ExploreObservationItem>?
+
+    var onTaxonSelected: ((Taxon) -> Void)?
 
     private lazy var collectionView = UICollectionView(
         frame: .zero,
         collectionViewLayout: ExploreCollectionViewLayoutFactory.makeLayout(for: viewModel.displayMode)
     )
 
-    private let titleLabel: UILabel = {
-        let label = UILabel()
-        label.font = .systemFont(ofSize: 42, weight: .semibold)
-        label.adjustsFontForContentSizeCategory = true
-        label.text = "Wild Atlas"
-        label.textAlignment = .center
-        label.textColor = .wildlifePrimaryText
-        return label
-    }()
-
-    private let searchPlaceholderView: UIView = {
-        let view = UIView()
-        view.layer.cornerRadius = 20
-        view.layer.borderColor = UIColor.wildlifeAccent.withAlphaComponent(0.28).cgColor
-        view.layer.borderWidth = 1
-        view.backgroundColor = UIColor.wildlifeAccentBackground.withAlphaComponent(0.26)
-        return view
-    }()
-
-    private let searchIconView: UIImageView = {
-        let imageView = UIImageView(image: UIImage(systemName: "magnifyingglass"))
-        imageView.tintColor = .wildlifeAccent
-        imageView.contentMode = .scaleAspectFit
-        return imageView
-    }()
-
-    private let searchLabel: UILabel = {
-        let label = UILabel()
-        label.font = .preferredFont(forTextStyle: .body)
-        label.adjustsFontForContentSizeCategory = true
-        label.text = "Search species"
-        label.textColor = .secondaryLabel
-        return label
-    }()
-
-    private let taxonChip = ExploreHeaderChip(title: "All wildlife")
-    private let qualityChip = ExploreHeaderChip(title: "Any grade")
-    private let sortChip = ExploreHeaderChip(title: "Newest")
-
-    private let modeControl: UISegmentedControl = {
-        let control = UISegmentedControl(items: ["List", "Grid"])
-        control.selectedSegmentIndex = 0
-        control.accessibilityLabel = "Explore display mode"
-        return control
-    }()
-
+    private let headerView = ExploreHeaderView()
     private let stateView = ExploreStateView()
+    private lazy var taxonSearchPanelView = TaxonSearchPanelView(imageLoader: imageLoader)
+    private lazy var keyboardDismissTapGesture: UITapGestureRecognizer = {
+        let gesture = UITapGestureRecognizer(target: self, action: #selector(dismissSearchKeyboard))
+        gesture.cancelsTouchesInView = false
+        gesture.delegate = self
+        return gesture
+    }()
 
-    init(viewModel: ExploreViewModel, imageLoader: ImageLoader) {
+    init(
+        viewModel: ExploreViewModel,
+        taxonSearchViewModel: TaxonSearchViewModel,
+        imageLoader: ImageLoader
+    ) {
         self.viewModel = viewModel
+        self.taxonSearchViewModel = taxonSearchViewModel
         self.imageLoader = imageLoader
         super.init(nibName: nil, bundle: nil)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
-        fatalError("Use init(viewModel:imageLoader:) instead.")
+        fatalError("Use init(viewModel:taxonSearchViewModel:imageLoader:) instead.")
     }
 
     override func viewDidLoad() {
@@ -85,6 +55,7 @@ final class ExploreViewController: UIViewController {
         configureView()
         configureHierarchy()
         configureCollectionView()
+        configureKeyboardDismissal()
         configureDataSource()
         bindViewModel()
         stateView.onRetry = { [weak self] in
@@ -101,52 +72,22 @@ final class ExploreViewController: UIViewController {
     }
 
     private func configureHierarchy() {
-        let searchStackView = UIStackView(arrangedSubviews: [searchIconView, searchLabel])
-        searchStackView.axis = .horizontal
-        searchStackView.alignment = .center
-        searchStackView.spacing = 14
-        searchStackView.translatesAutoresizingMaskIntoConstraints = false
-        searchPlaceholderView.addSubview(searchStackView)
-
-        let chipsStackView = UIStackView(arrangedSubviews: [taxonChip, qualityChip, sortChip])
-        chipsStackView.axis = .horizontal
-        chipsStackView.alignment = .center
-        chipsStackView.distribution = .fillEqually
-        chipsStackView.spacing = 12
-
-        let headerStackView = UIStackView(arrangedSubviews: [
-            titleLabel,
-            searchPlaceholderView,
-            chipsStackView,
-            modeControl
-        ])
-        headerStackView.axis = .vertical
-        headerStackView.alignment = .fill
-        headerStackView.spacing = 14
-        headerStackView.translatesAutoresizingMaskIntoConstraints = false
-
+        headerView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         stateView.translatesAutoresizingMaskIntoConstraints = false
+        taxonSearchPanelView.translatesAutoresizingMaskIntoConstraints = false
 
-        view.addSubview(headerStackView)
+        view.addSubview(headerView)
         view.addSubview(collectionView)
         view.addSubview(stateView)
+        view.addSubview(taxonSearchPanelView)
 
         NSLayoutConstraint.activate([
-            headerStackView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
-            headerStackView.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
-            headerStackView.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
+            headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            headerView.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
+            headerView.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
 
-            searchPlaceholderView.heightAnchor.constraint(equalToConstant: 44),
-            searchIconView.widthAnchor.constraint(equalToConstant: 22),
-            searchIconView.heightAnchor.constraint(equalToConstant: 22),
-            searchStackView.leadingAnchor.constraint(equalTo: searchPlaceholderView.leadingAnchor, constant: 18),
-            searchStackView.trailingAnchor.constraint(lessThanOrEqualTo: searchPlaceholderView.trailingAnchor, constant: -18),
-            searchStackView.centerYAnchor.constraint(equalTo: searchPlaceholderView.centerYAnchor),
-
-            modeControl.heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
-
-            collectionView.topAnchor.constraint(equalTo: headerStackView.bottomAnchor, constant: 18),
+            collectionView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 18),
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -154,7 +95,12 @@ final class ExploreViewController: UIViewController {
             stateView.topAnchor.constraint(equalTo: collectionView.topAnchor),
             stateView.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
             stateView.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
-            stateView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+            stateView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+
+            taxonSearchPanelView.topAnchor.constraint(equalTo: headerView.searchAnchorView.bottomAnchor, constant: 12),
+            taxonSearchPanelView.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
+            taxonSearchPanelView.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
+            taxonSearchPanelView.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -16)
         ])
     }
 
@@ -175,8 +121,10 @@ final class ExploreViewController: UIViewController {
             forSupplementaryViewOfKind: ExplorePaginationFooterView.elementKind,
             withReuseIdentifier: ExplorePaginationFooterView.reuseIdentifier
         )
+    }
 
-        modeControl.addTarget(self, action: #selector(displayModeChanged), for: .valueChanged)
+    private func configureKeyboardDismissal() {
+        view.addGestureRecognizer(keyboardDismissTapGesture)
     }
 
     private func configureDataSource() {
@@ -234,6 +182,33 @@ final class ExploreViewController: UIViewController {
         viewModel.onDisplayModeChange = { [weak self] mode in
             self?.applyDisplayMode(mode)
         }
+        headerView.onSearchBegan = { [weak self] text in
+            self?.handleSearchBegan(text: text)
+        }
+        headerView.onSearchTextChanged = { [weak self] text in
+            self?.taxonSearchViewModel.updateQuery(text)
+        }
+        headerView.onSearchCleared = { [weak self] in
+            self?.taxonSearchViewModel.updateQuery("")
+        }
+        headerView.onSearchReturned = { [weak self] in
+            self?.taxonSearchPanelView.hide()
+        }
+        headerView.onDisplayModeChanged = { [weak self] mode in
+            self?.viewModel.setDisplayMode(mode)
+        }
+        taxonSearchViewModel.onStateChange = { [weak self] state in
+            self?.taxonSearchPanelView.render(state)
+        }
+        taxonSearchViewModel.onTaxonSelected = { [weak self] taxon in
+            self?.headerView.setSearchText(taxon.commonName ?? taxon.scientificName)
+            self?.headerView.resignSearchFocus()
+            self?.taxonSearchPanelView.hide()
+            self?.onTaxonSelected?(taxon)
+        }
+        taxonSearchPanelView.onItemSelected = { [weak self] id in
+            self?.taxonSearchViewModel.selectItem(id: id)
+        }
     }
 
     private func render(state: ExploreViewModel.State) {
@@ -270,8 +245,7 @@ final class ExploreViewController: UIViewController {
     }
 
     private func applyDisplayMode(_ mode: ExploreDisplayMode) {
-        modeControl.selectedSegmentIndex = mode == .list ? 0 : 1
-        modeControl.accessibilityValue = mode == .list ? "List" : "Grid"
+        headerView.setDisplayMode(mode)
 
         let visibleItemID = firstVisibleItemID()
         UIView.performWithoutAnimation {
@@ -303,8 +277,17 @@ final class ExploreViewController: UIViewController {
         collectionView.scrollToItem(at: indexPath, at: .top, animated: false)
     }
 
-    @objc private func displayModeChanged() {
-        viewModel.setDisplayMode(modeControl.selectedSegmentIndex == 0 ? .list : .grid)
+    private func handleSearchBegan(text: String) {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            taxonSearchViewModel.viewDidLoad()
+        } else {
+            taxonSearchViewModel.updateQuery(text)
+        }
+    }
+
+    @objc private func dismissSearchKeyboard() {
+        headerView.resignSearchFocus()
+        taxonSearchPanelView.hide()
     }
 }
 
@@ -312,5 +295,16 @@ extension ExploreViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         let item = dataSource?.itemIdentifier(for: indexPath)
         viewModel.loadNextPageIfNeeded(currentItemID: item?.id)
+    }
+}
+
+extension ExploreViewController: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard gestureRecognizer === keyboardDismissTapGesture, let touchedView = touch.view else {
+            return true
+        }
+
+        return !touchedView.isDescendant(of: headerView.searchAnchorView)
+            && !touchedView.isDescendant(of: taxonSearchPanelView)
     }
 }
